@@ -40,15 +40,18 @@ def assign(q1: pd.DataFrame | None, full: pd.DataFrame | None,
     # starters with a G/F/C slot, from either table (dedupe by game/player)
     frames = [t[t["pos"].isin(["G", "F", "C"])][["game_id", "team", "player_id", "pos"]]
               for t in (q1, full) if t is not None and len(t)]
-           st = pd.concat(frames, ignore_index=True).drop_duplicates(["game_id", "player_id"]).reset_index(drop=True)
+    st = pd.concat(frames, ignore_index=True).drop_duplicates(["game_id", "player_id"])
     st = st.merge(prof[["ast_r", "reb_r"]], left_on="player_id", right_index=True, how="left")
-    st["pos5"] = "C"
-    guards = st["pos"] == "G"
-    fwds = st["pos"] == "F"
-    g_rank = st[guards].groupby(["game_id", "team"])["ast_r"].rank(method="first", ascending=False)
-    f_rank = st[fwds].groupby(["game_id", "team"])["reb_r"].rank(method="first", ascending=False)
-    st.loc[g_rank.index, "pos5"] = np.where(g_rank == 1, "PG", "SG")
-    st.loc[f_rank.index, "pos5"] = np.where(f_rank == 1, "PF", "SF")
+    st = st.reset_index(drop=True)
+    guards = (st["pos"] == "G").to_numpy()
+    fwds = (st["pos"] == "F").to_numpy()
+    # rank within each game/team: 1 = most assists (guards) / rebounds (forwards) per minute
+    g_rank = st["ast_r"].where(guards).groupby([st["game_id"], st["team"]]).rank(
+        method="first", ascending=False).to_numpy()
+    f_rank = st["reb_r"].where(fwds).groupby([st["game_id"], st["team"]]).rank(
+        method="first", ascending=False).to_numpy()
+    st["pos5"] = np.select([guards & (g_rank == 1), guards, fwds & (f_rank == 1), fwds],
+                           ["PG", "SG", "PF", "SF"], default="C")
     game_pos = st.set_index(["game_id", "player_id"])["pos5"]
 
     primary = st.groupby("player_id")["pos5"].agg(lambda s: s.mode().iat[0])
