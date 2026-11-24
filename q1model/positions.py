@@ -40,7 +40,7 @@ def assign(q1: pd.DataFrame | None, full: pd.DataFrame | None,
     # starters with a G/F/C slot, from either table (dedupe by game/player)
     frames = [t[t["pos"].isin(["G", "F", "C"])][["game_id", "team", "player_id", "pos"]]
               for t in (q1, full) if t is not None and len(t)]
-    st = pd.concat(frames).drop_duplicates(["game_id", "player_id"])
+           st = pd.concat(frames, ignore_index=True).drop_duplicates(["game_id", "player_id"]).reset_index(drop=True)
     st = st.merge(prof[["ast_r", "reb_r"]], left_on="player_id", right_index=True, how="left")
     st["pos5"] = "C"
     guards = st["pos"] == "G"
